@@ -1,0 +1,94 @@
+# Changelog
+
+All notable changes to **rog-cetra-linux** are documented here.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project aims to follow [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+## [1.6] — 2026-10-14
+
+**Confirmed on real hardware:** SteamOS (Steam Deck) in *gaming mode* and *desktop mode*,
+and Fedora with KDE Plasma. Gestures, tones and the volume overlay all act on the earbuds
+only; the system default device is never changed.
+
+## [1.5] — 2026-10-14
+### Fixed
+- **Confirmation tones now reliably reach the earbuds.** The root cause was that the target
+  audio node was resolved to the device *description* ("ROG CETRA OPEN WIRELESS Analog Stereo")
+  instead of the real PipeWire `node.name`, so `paplay`/`pw-play` silently fell back to the
+  system default device. The node is now resolved via `pactl` (authoritative) with
+  `pw-dump`/`wpctl` fallbacks, and a resolved name is only accepted if it is a real
+  `node.name` (starts with `alsa_`) — never a description.
+### Changed
+- VID/PID matching for the dongle (`0b05:1cac`) hardened: numeric **and** hex-string
+  properties are handled, plus a fallback name match.
+
+## [1.4] — 2026-10-14
+### Fixed
+- **Confirmation tones were completely silent.** The tone WAV was fed to `paplay` on stdin
+  (without a file argument); `paplay` only reads stdin with `--raw`. The file is now passed
+  as an argument, the exit status is checked, and a real fallback to `pw-play` is used.
+### Added
+- `--selftest`: plays every confirmation tone in turn and prints which audio backend is used
+  (`python3 ~/.local/bin/rog-cetra-buttons.py --selftest`).
+
+## [1.3] — 2026-10-14
+### Changed
+- **No more switching of the default sink.** The v1.2 approach (temporarily switching the
+  default to the earbuds so the overlay shows them) was removed: it diverted running audio
+  and did not reliably switch back.
+- Confirmation tones now use `paplay --device <node.name>` (PulseAudio-compatible), with
+  `pw-play` + `PIPEWIRE_NODE` and `pw-play --target` as fallbacks, because WirePlumber does
+  not reliably honour `pw-play --target`.
+
+## [1.2] — 2026-10-14
+### Added
+- Attempted to make the volume overlay show the earbuds by temporarily switching the default
+  sink for the duration of a key press (with a lock and a restore timer). **Reverted in 1.3**
+  — see above.
+
+## [1.1] — 2026-10-14
+### Changed
+- Confirmation tones routed to the earbuds by `node.name` instead of a global object id.
+  (Turned out to be insufficient — the real fix came in 1.5.)
+
+## [1.0] — 2026-10-14
+### Changed — first properly working gesture/audio layer
+- **All gestures and tones act on the ROG Cetra only.** The default output device is never
+  touched or switched.
+- Target device is resolved from the USB ID (`0b05:1cac`) at runtime.
+- **Removed the virtual `uinput` keyboard.** Volume up/down, mute and mic-mute now go
+  straight to the earbuds' sink/source via `wpctl`; the volume overlay is triggered directly
+  on the desktop side.
+- The device is grabbed with `EVIOCGRAB`, so the dongle's hard-wired media keys no longer
+  fire a second, unwanted action.
+
+---
+
+## First public release — before 1.0
+
+The initial public version laid the groundwork:
+
+- WirePlumber volume fix using software volume (`api.alsa.soft-mixer = true`), so the volume
+  slider covers its full range again.
+- Decoding of the vendor HID tap reports (`cc 22 43 …` with side and tap count) from the
+  dongle's hidraw interface.
+- Volume up/down emulated through a **virtual `uinput` keyboard** so the system/Steam overlay
+  appeared, with `wpctl` as a fallback.
+- Play/pause and track control via **MPRIS** (`busctl --user`).
+- Fixed gesture table (1–4 taps, left/right) and tone files generated into
+  `~/.cache/rog-cetra/`.
+
+Note: this first version controlled the **system default** device for volume and played
+confirmation tones on the default device as well. That is exactly what later releases
+changed — everything now targets the earbuds only.
+
+[Unreleased]: https://github.com/Kamikaze01git/rog-cetra-linux/compare/v1.6...HEAD
+[1.6]: https://github.com/Kamikaze01git/rog-cetra-linux/releases/tag/v1.6
+[1.5]: https://github.com/Kamikaze01git/rog-cetra-linux/releases/tag/v1.5
+[1.4]: https://github.com/Kamikaze01git/rog-cetra-linux/releases/tag/v1.4
+[1.3]: https://github.com/Kamikaze01git/rog-cetra-linux/releases/tag/v1.3
+[1.2]: https://github.com/Kamikaze01git/rog-cetra-linux/releases/tag/v1.2
+[1.1]: https://github.com/Kamikaze01git/rog-cetra-linux/releases/tag/v1.1
+[1.0]: https://github.com/Kamikaze01git/rog-cetra-linux/releases/tag/v1.0
