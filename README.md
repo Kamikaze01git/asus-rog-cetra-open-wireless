@@ -1,18 +1,21 @@
-# ROG Cetra Open Wireless on Linux (Steam Deck, Debian, Fedora …)
+# ROG Cetra Open Wireless — full Linux & Steam Deck support
 
-Make the **ASUS ROG Cetra Open Wireless** open-ear gaming earbuds work properly on Linux
-when connected via their **2.4 GHz USB-C dongle** (ROG SpeedNova):
+Make the **ASUS ROG Cetra Open Wireless** open-ear gaming earbuds work **properly** under
+Linux when connected through their **2.4 GHz USB-C dongle** (ROG SpeedNova, USB `0b05:1cac`):
 
-- ✅ **Volume slider works across its full range** (out of the box only the first ~5 % of the slider do anything)
-- ✅ **Tap controls on the ear hooks work** (out of the box they do nothing useful on Linux)
-- ✅ **Freely assignable gestures** – 1–4 taps, left and right = 8 gestures
-- ✅ **Audible confirmation tones** (mute, mic mute, play/pause) and the normal Steam volume overlay
+- ✅ **Full-range volume** — out of the box only the first ~5 % of the slider do anything
+- ✅ **Ear-hook tap gestures** — 1–4 taps per side, fully re-mappable in the script
+- ✅ **Confirmation tones always from the earbuds** — even when another device is the system default
+- ✅ **Gestures control the earbuds only** — your default device is never touched or switched
+- ✅ **Correct volume overlay** — the on-screen display shows the real earbud level
 - ✅ Mic and audio at the same time, low latency, no Bluetooth involved
 
-Tested on the **Steam Deck (SteamOS, gaming and desktop mode)** and a **Debian laptop**.
-Should work on any distribution with PipeWire + WirePlumber and systemd.
+> 🇩🇪 Eine kurze deutsche Zusammenfassung steht [unten](#deutsch).
 
-> Deutsch: Eine kurze deutsche Zusammenfassung steht [unten](#deutsch).
+**Verified on:** SteamOS on the Steam Deck (*gaming mode* **and** *desktop mode*) and
+**Fedora / KDE Plasma**. Should work on any distribution with PipeWire + WirePlumber and systemd.
+
+**New in 1.6?** See [What's new](#whats-new) and the full [CHANGELOG](CHANGELOG.md).
 
 ---
 
@@ -32,15 +35,17 @@ Uninstall everything:
 bash install-rog-cetra.sh --uninstall
 ```
 
-**Steam Deck:** run it in desktop mode (Konsole) or via SSH. Everything is installed to
-your home directory and `/etc`, so it survives reboots and SteamOS updates. Nothing on the
-read-only system image is touched.
+**Steam Deck:** run it in desktop mode (Konsole) or copy it over via `scp` and run it there.
+Everything is installed to your home directory and `/etc`, so it survives reboots and
+SteamOS updates. Nothing on the read-only system image is touched.
 
 ### Requirements
 
 - PipeWire + WirePlumber (0.4 and 0.5 are both handled), systemd, Python 3
-- `pw-play` for the confirmation tones (Debian: `pipewire-bin`, Fedora: `pipewire-utils`)
-- A local desktop session (the device permissions use `uaccess`, i.e. the logged-in seat user)
+- `paplay` **or** `pw-play` for the confirmation tones
+  (Debian/SteamOS: `pulseaudio-utils` / `pipewire-bin`, Fedora: `pulseaudio-utils` / `pipewire-utils`)
+- `pactl` (part of `pulseaudio-utils`) — used to resolve the earbuds' audio node reliably
+- A local desktop session (device permissions use `uaccess`, i.e. the logged-in seat user)
 
 ---
 
@@ -56,17 +61,51 @@ read-only system image is touched.
 Edit the `ACTIONS` table in `~/.local/bin/rog-cetra-buttons.py`, then
 `systemctl --user restart rog-cetra-buttons`.
 
-### Confirmation tones
+Self-test (plays every confirmation tone and tells you which audio backend it uses):
+
+```bash
+python3 ~/.local/bin/rog-cetra-buttons.py --selftest
+```
+
+---
+
+## What's new
+
+The first public version laid the groundwork (volume fix, gesture decoding). **This release
+reworks the whole gesture and audio layer** so it behaves like a native device:
+
+- 🎯 **The earbuds are now a real, independent device.**
+  Volume up/down, mute and mic-mute always act on the **ROG Cetra** — never on the system
+  default. The default output device is **never switched**, so a running call or music
+  stream is never diverted.
+- 🔔 **Confirmation tones reliably come out of the earbuds.**
+  The tone is routed to the earbuds' audio node by name (`paplay --device`, with
+  `pw-play`/`PIPEWIRE_NODE` fallbacks) instead of playing on whatever device happens to be
+  the system default.
+- 🖥️ **Correct volume overlay (KDE Plasma).**
+  Plasma's OSD is bound to the default sink, so it used to show the wrong device. The script
+  now asks the OSD service to display the **actual earbud level** right after each change.
+- 🔇 **No more double actions.** The dongle also emits a few hard-wired media keys; the
+  script grabs the input device (`EVIOCGRAB`) so those no longer fire a second time.
+- 🧹 **Simpler and more robust internals:** no more virtual `uinput` keyboard, and the audio
+  node is resolved via `pw-dump` / `pactl` / `wpctl` with graceful fallbacks.
+
+If you ran an earlier version, just run the installer again — it overwrites everything cleanly.
+
+---
+
+## Confirmation tones
 
 | Action                | Tone                                   |
 |-----------------------|----------------------------------------|
-| Volume up/down        | short tick (+ Steam volume overlay)    |
+| Volume up/down        | short tick                             |
 | Output mute / unmute  | 3 low tones, falling / rising          |
 | Mic mute / unmute     | 3 high tones, falling / rising         |
 | Pause / Play          | 2 tones, falling / rising              |
 | No media player found | 1 long low tone (normal inside games)  |
 
-Tone loudness is compensated for the current volume (`TONE_LEVEL` in the script).
+The tones are **always played through the earbuds** and are gain-compensated for the current
+volume (`TONE_LEVEL` in the script), so they stay at a constant loudness.
 
 ---
 
@@ -79,6 +118,9 @@ Tone loudness is compensated for the current volume (`TONE_LEVEL` in the script)
   Deck through the dongle the whole time). With a **laptop charger (65 W+)** the dongle kept
   rebooting (it briefly re-enumerates as a MediaTek device `0e8d:0003`) and the laptop did
   not charge. Use a separate USB-C port for charging laptops.
+- **Volume overlay:** the on-screen display always belongs to the *default* sink in
+  KDE/GNOME. This project shows the correct earbud level by asking the OSD service directly —
+  it never switches your default device to do so.
 
 ---
 
@@ -150,17 +192,19 @@ Additionally the firmware sends a few **hard-wired consumer keys** for some gest
 These fixed keys are what you get without this project (and only when no parallel
 Bluetooth connection steals them).
 
-**How the script handles it:**
+### 3. How the script handles it
 
 1. Reads the raw gestures from hidraw (found by USB ID, survives re-plugging).
 2. Grabs (`EVIOCGRAB`) the Consumer Control input device so the hard-wired keys no longer
    reach the system – otherwise every gesture would trigger two actions.
-3. Executes the configured action:
-   - volume up/down via a virtual **uinput** keyboard → identical to the Steam Deck's own
-     volume buttons, including the Steam overlay
-   - mute / mic mute via `wpctl`
-   - play/pause / next / previous via **MPRIS** (`busctl --user`) to the currently playing player
-4. Plays a short confirmation tone via `pw-play`, gain-compensated for the current sink volume.
+3. Resolves the **ROG Cetra's own audio node** (`pw-dump` → `pactl` → `wpctl`, with
+   fallbacks) — the system default device is left completely alone.
+4. Executes the configured action:
+   - **volume up/down** → `wpctl` on the earbuds' sink, then shows the correct OSD
+   - **mute / mic mute** → `wpctl` on the earbuds' sink/source
+   - **play/pause / next / previous** → **MPRIS** (`busctl --user`) to the currently playing player
+5. Plays a short confirmation tone **on the earbuds** (`paplay --device`, then
+   `pw-play` with `PIPEWIRE_NODE`), gain-compensated for the current volume.
 
 ### Handy debugging one-liners
 
@@ -177,14 +221,17 @@ journalctl --user -u rog-cetra-buttons -f
 
 ## Contributing
 
-Issues and pull requests are welcome – especially reports from other distributions,
-other dongle firmware versions, or other ASUS SpeedNova devices that might use the same
+Issues and pull requests are welcome – especially reports from other distributions, other
+dongle firmware versions, or other ASUS SpeedNova devices that might use the same
 `cc 22 43` report format.
 
 ## Credits
 
-Developed by **Kamikaze01git** together with **Claude (Anthropic)**: testing, hardware
-analysis and requirements by the author; protocol analysis and code written with Claude.
+Developed by **Kamikaze01git**. Testing, hardware analysis and requirements by the author.
+
+Built **in collaboration with AI**: protocol analysis and the original implementation with
+**Claude Code (Anthropic)**; the gesture/audio rework, porting and documentation with
+**DeepSeek v4.1 Flash** (running inside the OpenHands agent).
 
 ## License
 
@@ -196,14 +243,25 @@ MIT – see [LICENSE](LICENSE).
 
 Macht die **ASUS ROG Cetra Open Wireless** (über den 2,4-GHz-Dongle) unter Linux voll nutzbar:
 Lautstärkeregler über den ganzen Bereich, frei belegbare Tipp-Gesten an den Ohrbügeln mit
-Bestätigungstönen, Mikro und Ton gleichzeitig ohne Bluetooth-Latenz. Getestet auf dem
-Steam Deck und einem Debian-Laptop.
+Bestätigungstönen, Mikro und Ton gleichzeitig ohne Bluetooth-Latenz.
+
+**Wichtig:** Alle Gesten und Töne betreffen **ausschließlich die Cetra**. Das
+Standard-Ausgabegerät wird **nie** umgeschaltet — ein laufendes Gespräch (z. B. Nextcloud Talk)
+oder Musik bleibt unangetastet. Der Bestätigungston kommt immer aus den Ohrhörern, und die
+Lautstärke-Einblendung (KDE Plasma) zeigt den korrekten Cetra-Wert.
+
+Getestet auf dem **Steam Deck (SteamOS, Gaming- und Desktop-Modus)** und einem
+**Fedora/KDE-Laptop**.
 
 ```bash
 curl -O https://raw.githubusercontent.com/Kamikaze01git/rog-cetra-linux/main/install-rog-cetra.sh
-bash install-rog-cetra.sh            # installieren
-bash install-rog-cetra.sh --uninstall  # entfernen
+bash install-rog-cetra.sh               # installieren
+bash install-rog-cetra.sh --uninstall   # entfernen
 ```
 
-Alle Details und Erklärungen stehen zusätzlich (auf Englisch) als Kommentar in
+Alle Details stehen zusätzlich (auf Englisch) als Kommentar in
 `~/.config/systemd/user/rog-cetra-buttons.service`.
+
+> **Hinweis:** Dieses Projekt wurde in Zusammenarbeit mit KI erstellt – Claude Code (Anthropic)
+> für die ursprüngliche Protokollanalyse und Umsetzung, DeepSeek v4.1 Flash (im OpenHands-Agent)
+> für die Überarbeitung von Gesten/Audio sowie die Dokumentation.
